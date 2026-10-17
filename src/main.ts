@@ -304,33 +304,62 @@ function keyButton(k: Key): HTMLButtonElement {
   setLabel(b, keyLabel(k));
   if (k.alts?.length) b.classList.add('has-alts');
 
+  // Teclas con alternativas: se escribe al soltar. Mantener pulsado (o deslizar fuera de la tecla)
+  // abre las alternativas; se elige una deslizando el dedo hasta ella y soltando.
   let longTimer = 0;
   let longFired = false;
+  let start = { x: 0, y: 0 };
+  const altUnder = (ev: PointerEvent) =>
+    document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('.popover .key') ?? null;
+  const openAlts = () => {
+    clearTimeout(longTimer);
+    if (longFired) return;
+    longFired = true;
+    openPopover(b, k.alts!);
+  };
   b.addEventListener('pointerdown', ev => {
     ev.preventDefault(); // el editor no pierde el foco
     b.classList.add('pressed');
     longFired = false;
     if (k.alts?.length) {
-      // con alternativas: se escribe al soltar, y si se mantiene se abren las alternativas
-      longTimer = window.setTimeout(() => { longFired = true; openPopover(b, k.alts!); }, 380);
+      // los movimientos siguen llegando aunque el dedo salga de la tecla
+      try { b.setPointerCapture(ev.pointerId); } catch { /* puntero ya liberado */ }
+      start = { x: ev.clientX, y: ev.clientY };
+      longTimer = window.setTimeout(openAlts, 350);
     } else {
       press(k);
       if ('cmd' in k && k.cmd === 'back') startRepeat(k);
     }
   });
+  b.addEventListener('pointermove', ev => {
+    if (!k.alts?.length || !b.classList.contains('pressed')) return;
+    if (!longFired && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 14) openAlts();
+    if (longFired) {
+      const hit = altUnder(ev);
+      popover.querySelectorAll('.key').forEach(el => el.classList.toggle('hover', el === hit));
+    }
+  });
   const finish = (ev: PointerEvent, commit: boolean) => {
+    const wasPressed = b.classList.contains('pressed');
     b.classList.remove('pressed');
     stopRepeat();
     clearTimeout(longTimer);
-    if (!k.alts?.length || !commit) return;
+    if (!k.alts?.length || !wasPressed) return;
+    if (!commit) { if (longFired) closePopover(); return; }
     if (!longFired) { press(k); return; }
-    // deslizar hasta una alternativa y soltar la elige
-    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('.popover .key');
+    const target = altUnder(ev);
     if (target) target.dispatchEvent(new Event('choose'));
+    // soltar sobre la propia tecla deja las alternativas abiertas para elegir con un toque
+    else if (!b.contains(document.elementFromPoint(ev.clientX, ev.clientY))) closePopover();
   };
   b.addEventListener('pointerup', ev => finish(ev, true));
   b.addEventListener('pointercancel', ev => finish(ev, false));
-  b.addEventListener('pointerleave', ev => { if (!longFired) { b.classList.remove('pressed'); stopRepeat(); clearTimeout(longTimer); } void ev; });
+  b.addEventListener('pointerleave', () => {
+    // con ratón, salir de una tecla normal la suelta (las de alternativas tienen captura del puntero)
+    if (k.alts?.length) return;
+    b.classList.remove('pressed');
+    stopRepeat();
+  });
   b.addEventListener('contextmenu', ev => ev.preventDefault());
   return b;
 }
@@ -458,6 +487,10 @@ function toggleAbc() {
   layout();
 }
 
+// Debe coincidir con el punto de corte del CSS (funciones y números lado a lado)
+const wide = window.matchMedia('(min-width: 760px)');
+wide.addEventListener('change', () => layout());
+
 let renderedPanel = '';
 function layout() {
   const p: Panel = abcOn ? ABC : PANELS.find(x => x.id === activePanel) ?? PANELS[0];
@@ -468,7 +501,9 @@ function layout() {
   }
   keyboard.classList.toggle('show-num', narrowView === 'num' && !abcOn);
   numTab.classList.toggle('active', narrowView === 'num' && !abcOn);
-  panelTabs.forEach(t => t.classList.toggle('active', !abcOn && t.dataset.panel === activePanel));
+  // en modo estrecho solo se ve un panel: la pestaña de funciones se marca solo si es la visible
+  const fnVisible = !abcOn && (wide.matches || narrowView === 'panel');
+  panelTabs.forEach(t => t.classList.toggle('active', fnVisible && t.dataset.panel === activePanel));
   $('tool-abc').classList.toggle('active', abcOn);
 }
 layout();
@@ -548,11 +583,19 @@ function renderHistory() {
   }));
   $('history-empty').hidden = history.length > 0;
 }
+// El historial se abre al apoyar el dedo; en ventanas pequeñas aparece debajo de él y el «clic»
+// que Android envía al levantarlo caería sobre una entrada o sobre «Cerrar». Se ignora ese clic.
+let drawerOpenedAt = 0;
+drawer.addEventListener('click', ev => {
+  if (performance.now() - drawerOpenedAt < 500) { ev.stopPropagation(); ev.preventDefault(); }
+}, { capture: true });
+
 function openHistory() {
   if (!drawer.hidden) return closeHistory();
   saveHistoryNow();
   renderHistory();
   drawer.hidden = false;
+  drawerOpenedAt = performance.now();
 }
 function closeHistory() { drawer.hidden = true; mf.focus(); }
 tap('history-close', closeHistory);

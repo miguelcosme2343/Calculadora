@@ -1,8 +1,11 @@
 :root {
   --bg: #ffffff;
   --surface: #ffffff;
-  --panel: #f4f4f7;
+  --panel: #ffffff;
   --key: #ffffff;
+  --key-num: #f2f2f4;
+  --key-press: #dcdde6;
+  --grid-line: #e2e2e8;
   --key-fn: #f1f2f6;
   --key-op: #e8e9fb;
   --accent: #4f46e5;
@@ -29,7 +32,10 @@
     --bg: #111116;
     --surface: #1b1b22;
     --panel: #18181e;
-    --key: #2a2a33;
+    --key: #1d1d24;
+    --key-num: #2a2a33;
+    --key-press: #3a3a46;
+    --grid-line: #31313b;
     --key-fn: #22222a;
     --key-op: #2c2b52;
     --accent: #8f8cff;
@@ -153,6 +159,9 @@ math-field {
   --placeholder-color: var(--muted);
   --contains-highlight-background-color: transparent;
   padding: 6px 0;
+  /* MathLive ignora los toques (mover el cursor, seleccionar) si hereda user-select: none del body */
+  user-select: text;
+  -webkit-user-select: text;
 }
 math-field::part(virtual-keyboard-toggle),
 math-field::part(menu-toggle) { display: none; }
@@ -246,35 +255,59 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
 .solutions-btn:active { filter: brightness(0.92); }
 
 /* ---------- Teclado ---------- */
+/* Rejilla plana como la de Photomath: teclas sin redondear separadas por líneas finas.
+   El tamaño del texto sale del tamaño real de cada rejilla (unidades cq), así escala
+   igual en pantalla completa que en una ventana pequeña. */
 .keyboard {
   background: var(--panel);
-  border-top: 1px solid var(--line);
-  border-radius: 22px 22px 0 0;
-  padding: 6px 8px max(8px, env(safe-area-inset-bottom));
-  height: clamp(300px, 50dvh, 500px);
+  border-top: 1px solid var(--grid-line);
+  padding-bottom: env(safe-area-inset-bottom);
+  height: clamp(290px, 52dvh, 540px);
   display: grid;
-  gap: 6px;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas: 'tools' 'tabs' 'main';
+  touch-action: none; /* sin esto, deslizar el dedo se interpreta como desplazar la página */
 }
-.tools { grid-area: tools; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
-.tabs { grid-area: tabs; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.tools {
+  grid-area: tools;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding: 2px 4px;
+}
+.tabs {
+  grid-area: tabs;
+  display: flex;
+  gap: 6px;
+  padding: 2px 8px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .tab {
-  flex: 1 0 auto;
-  border: 1px solid var(--line);
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid var(--grid-line);
   background: var(--surface);
   border-radius: 999px;
-  padding: 4px 14px;
-  font-size: 12px;
+  padding: 4px 6px;
+  font-size: clamp(10px, 1.1vw + 6px, 13px);
   line-height: 1.15;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
+  overflow: hidden;
 }
 .tab.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
-.grid { grid-area: main; display: grid; gap: 5px; min-height: 0; }
+.grid {
+  grid-area: main;
+  display: grid;
+  gap: 1px;
+  min-height: 0;
+  background: var(--grid-line);
+  border-top: 1px solid var(--grid-line);
+  container-type: size;
+}
 .panel { grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
 .numpad { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
 
@@ -284,10 +317,11 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
 .key {
   position: relative;
   border: none;
-  border-radius: 12px;
-  background: var(--key-fn);
-  box-shadow: var(--shadow);
-  font-size: 19px;
+  border-radius: 0;
+  background: var(--key);
+  color: var(--text);
+  /* ~40 % del alto de una fila y sin pasarse del ancho de la columna */
+  font-size: clamp(14px, min(12cqh, 6cqw), 32px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -295,26 +329,28 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
   min-height: 0;
   padding: 0 2px;
   overflow: hidden;
-  transition: transform 60ms ease, filter 60ms ease;
+  transition: background-color 80ms ease;
 }
-.key.num { background: var(--key); font-size: 23px; font-weight: 500; }
-.key.opk { background: var(--key-op); color: var(--accent); font-size: 24px; }
-.key.small { font-size: 15px; }
+.panel .key { font-size: clamp(12px, min(9cqh, calc(32cqw / var(--cols, 5))), 26px); }
+.key.num { background: var(--key-num); font-weight: 400; }
+.key.opk { color: var(--accent); }
+.key.small { font-size: clamp(11px, min(6.5cqh, calc(20cqw / var(--cols, 5))), 19px); }
 .key.blank { visibility: hidden; }
-.key.pressed { transform: scale(0.95); filter: brightness(0.93); }
-.key .ML__latex { font-size: 0.95em; pointer-events: none; }
+.key.pressed { background: var(--key-press); }
+.key .ML__latex { font-size: 0.9em; pointer-events: none; }
 .key.has-alts::after {
   content: '';
   position: absolute;
-  right: 7px;
-  bottom: 6px;
-  width: 5px;
-  height: 5px;
+  right: 10%;
+  bottom: 14%;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--accent);
 }
-.key.tool { background: transparent; box-shadow: none; font-size: 16px; font-weight: 600; min-height: 38px; }
-.key.tool svg { width: 24px; height: 24px; }
+.key.tool { background: transparent; font-size: 17px; font-weight: 600; min-height: 42px; border-radius: 10px; }
+.key.tool svg { width: 26px; height: 26px; }
+.key.tool.pressed { background: var(--key-press); }
 .key.tool.active { background: var(--text); color: var(--bg); }
 
 /* Pantalla ancha (tablet completa): funciones y números lado a lado */
@@ -323,21 +359,21 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
     grid-template-areas: 'tools tools' 'tabs numpad' 'panel numpad';
     grid-template-rows: auto auto minmax(0, 1fr);
-    column-gap: 14px;
-    padding-inline: 14px;
   }
   .num-tab { display: none; }
   .keyboard .panel { grid-area: panel; display: grid !important; }
-  .keyboard .numpad { grid-area: numpad; display: grid !important; }
+  .keyboard .numpad { grid-area: numpad; display: grid !important; border-left: 1px solid var(--grid-line); }
   .display { padding-inline: 32px; }
 }
 
-/* Pantallas bajas (tablet en horizontal con poca altura) */
+/* Ventanas bajas (tablet en horizontal o ventana flotante pequeña) */
 @media (max-height: 560px) {
-  .keyboard { height: 60dvh; }
+  .keyboard { height: 62dvh; }
   math-field { font-size: 24px; }
   .answer { font-size: 20px; margin-top: 8px; }
-  .key.tool { min-height: 30px; }
+  .key.tool { min-height: 32px; }
+  .key.tool svg { width: 22px; height: 22px; }
+  .tabs { padding-bottom: 5px; }
 }
 
 /* Alternativas al mantener pulsada una tecla */
@@ -345,15 +381,17 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
   position: fixed;
   z-index: 30;
   display: flex;
-  gap: 6px;
-  padding: 6px;
+  gap: 4px;
+  padding: 5px;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid var(--grid-line);
+  border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  touch-action: none;
 }
 .popover[hidden] { display: none; }
-.popover .key { width: 56px; height: 52px; }
+.popover .key { width: 58px; height: 54px; border-radius: 10px; font-size: 22px; background: var(--key-num); }
+.popover .key.hover { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- Historial ---------- */
 .drawer {
