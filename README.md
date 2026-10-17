@@ -27,9 +27,8 @@ El motor (`src/engine/`) es independiente de la interfaz: `parser.ts` convierte 
 
 ## Instalar en la tablet
 
-Una PWA solo se puede instalar si se sirve por HTTPS. Opciones:
+La app está publicada en **https://miguelcosme2343.github.io/Calculadora/**. Cada subida a `main` pasa los tests, compila y la vuelve a publicar (GitHub Actions → GitHub Pages).
 
-1. **Publicarla** en un hosting estático gratuito (GitHub Pages, Netlify, Cloudflare Pages) con el contenido de `dist/`. Después, en Chrome de la tablet: menú ⋮ → *Añadir a pantalla de inicio* / *Instalar aplicación*.
-2. **Probarla sin instalar**: con `npm run dev` en el PC, abre en la tablet `http://<IP-del-PC>:5173` (misma red Wi-Fi). Funciona en el navegador, pero no se instala ni funciona sin conexión.
+En Chrome de la tablet: abre esa dirección y menú ⋮ → *Instalar aplicación* (o *Añadir a pantalla de inicio*). Una vez instalada funciona sin internet y se actualiza sola cuando hay una versión nueva.
 
-Una vez instalada funciona sin internet.
+Para probar cambios antes de publicarlos: `npm run build` y `npm run preview` en el PC, y en la tablet `http://<IP-del-PC>:4173` (misma red Wi-Fi; así no se instala ni funciona sin conexión).
