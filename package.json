@@ -1,0 +1,23 @@
+{
+  "name": "calculadora",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -p .",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "mathjs": "^15.2.0",
+    "mathlive": "^0.111.1"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
+  }
+}

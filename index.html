@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="description" content="Calculadora científica con fasores y formatos de salida a medida" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <title>Calculadora</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="modes" role="toolbar" aria-label="Modo de cálculo">
+          <button class="chip" id="mode-angle" title="Unidad de ángulo">DEG</button>
+          <button class="chip" id="mode-complex" title="Forma de los complejos">Polar</button>
+          <button class="chip" id="mode-notation" title="Notación de los resultados">Auto</button>
+        </div>
+        <button class="icon-btn" id="btn-settings" title="Ajustes" aria-label="Ajustes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
+        </button>
+      </header>
+
+      <main class="display" id="display">
+        <div class="input-row">
+          <div id="input-slot"></div>
+          <button class="clear-btn" id="btn-clear" title="Borrar todo" aria-label="Borrar todo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" /></svg>
+          </button>
+        </div>
+        <div class="answer" id="answer" aria-live="polite"></div>
+        <div class="answer-extra" id="answer-extra">
+          <div class="alt-row" id="alt-row"></div>
+          <button class="solutions-btn" id="btn-solutions" hidden>
+            Mostrar soluciones
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </button>
+        </div>
+      </main>
+
+      <section class="keyboard" id="keyboard" aria-label="Teclado">
+        <div class="tools" id="tools"></div>
+        <nav class="tabs" id="tabs" role="tablist"></nav>
+        <div class="grid panel" id="panel"></div>
+        <div class="grid numpad" id="numpad"></div>
+      </section>
+    </div>
+
+    <div class="popover" id="popover" hidden></div>
+
+    <aside class="drawer" id="history" aria-label="Historial" hidden>
+      <header>
+        <h2>Historial</h2>
+        <div>
+          <button class="text-btn" id="history-clear">Vaciar</button>
+          <button class="icon-btn" id="history-close" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+      </header>
+      <ol id="history-list"></ol>
+      <p class="empty-note" id="history-empty">Los cálculos se guardan aquí solos.</p>
+    </aside>
+
+    <div class="sheet-backdrop" id="sheet" hidden>
+      <div class="sheet" role="dialog" aria-label="Soluciones">
+        <header>
+          <h2>Soluciones</h2>
+          <button class="icon-btn round" id="sheet-close" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </header>
+        <div class="sheet-body" id="sheet-body"></div>
+      </div>
+    </div>
+
+    <dialog id="settings">
+      <form method="dialog">
+        <h2>Formato predeterminado</h2>
+        <label>Notación
+          <select name="notation">
+            <option value="auto">Automática</option>
+            <option value="fixed">Decimales fijos</option>
+            <option value="sci">Científica (×10ⁿ)</option>
+            <option value="eng">Ingeniería (×10³ⁿ)</option>
+          </select>
+        </label>
+        <label>Cifras significativas <input type="number" name="sig" min="1" max="15" /></label>
+        <label>Decimales (notación fija) <input type="number" name="decimals" min="0" max="12" /></label>
+        <label class="check"><input type="checkbox" name="engPrefix" /> Prefijos SI en ingeniería (4.7 k, 3.3 µ)</label>
+        <label class="check"><input type="checkbox" name="fractions" /> Mostrar fracciones exactas cuando se pueda</label>
+        <label class="check"><input type="checkbox" name="decimalComma" /> Coma decimal (2,5)</label>
+        <h2>Complejos y ángulos</h2>
+        <label>Forma de los complejos
+          <select name="complexForm">
+            <option value="polar">Polar (r∠θ)</option>
+            <option value="rect">Rectangular (a + jb)</option>
+          </select>
+        </label>
+        <label>Unidad de ángulo
+          <select name="angle">
+            <option value="deg">Grados</option>
+            <option value="rad">Radianes</option>
+          </select>
+        </label>
+        <label>Unidad imaginaria
+          <select name="imagUnit">
+            <option value="j">j (ingeniería)</option>
+            <option value="i">i (matemáticas)</option>
+          </select>
+        </label>
+        <div class="dialog-actions"><button class="primary" value="close">Listo</button></div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
