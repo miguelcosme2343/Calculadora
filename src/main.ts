@@ -10,6 +10,7 @@ import {
 import { z } from './engine/evaluate';
 import { ABC, NUMPAD, PANELS, TOOLS, type Key, type Panel } from './ui/keys';
 import { buildSheet } from './ui/solutions';
+import { loadOcr, OcrError, recognize, saveOcr, type OcrConfig } from './ocr';
 
 registerSW({ immediate: true });
 
@@ -56,7 +57,18 @@ $('input-slot').replaceWith(mf);
 mf.mathVirtualKeyboardPolicy = 'manual';
 mf.smartFence = true;
 mf.popoverPolicy = 'off';
-mf.menuItems = [];
+// Menú al mantener pulsada la expresión (sustituye al de MathLive)
+mf.menuItems = [
+  { label: 'Deshacer', onMenuSelect: () => { mf.executeCommand('undo'); update(); } },
+  { label: 'Pegar', onMenuSelect: () => { void pasteFromClipboard(); } },
+  {
+    label: 'Copiar expresión',
+    onMenuSelect: () => { void copy(mf.getValue('ascii-math')); },
+  },
+  { label: 'Copiar en LaTeX', onMenuSelect: () => { void copy(mf.getValue('latex-unstyled')); } },
+  { type: 'divider' },
+  { label: 'Borrar todo', onMenuSelect: () => { $('btn-clear').click(); } },
+];
 mf.placeholder = '\\text{Escribe un problema matemático}';
 mf.inlineShortcuts = {
   ...mf.inlineShortcuts,
@@ -410,12 +422,13 @@ function press(k: Key) {
   if (!mf.hasFocus()) mf.focus();
   if ('cmd' in k) {
     switch (k.cmd) {
-      case 'back': mf.executeCommand('deleteBackward'); break;
+      case 'back': backspace(); break;
       case 'left': mf.executeCommand('moveToPreviousChar'); break;
       case 'right': mf.executeCommand('moveToNextChar'); break;
       case 'newline': newline(); break;
       case 'history': openHistory(); return;
       case 'abc': toggleAbc(); return;
+      case 'paste': void pasteFromClipboard(); return;
     }
     update();
     return;
@@ -445,6 +458,72 @@ function newline() {
   }
   mf.focus();
   update();
+}
+
+// Líneas de un sistema \begin{cases}…\end{cases} (los «\\» de matrices anidadas no cuentan)
+function systemRows(latex: string): string[] | null {
+  const m = /^\\begin\{cases\}([\s\S]*)\\end\{cases\}$/.exec(latex.trim());
+  if (!m) return null;
+  const s = m[1];
+  const rows: string[] = [];
+  let depth = 0, envs = 0, start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      if (s[i + 1] === '\\' && depth === 0 && envs === 0) { rows.push(s.slice(start, i)); start = i + 2; }
+      else if (s.startsWith('begin', i + 1)) envs++;
+      else if (s.startsWith('end', i + 1)) envs--;
+      i++; // salta «\{», «\}» y la primera letra de los comandos
+    } else if (s[i] === '{') depth++;
+    else if (s[i] === '}') depth--;
+  }
+  rows.push(s.slice(start));
+  return rows.map(r => r.trim());
+}
+
+const MARK = '\\placeholder{}';
+const blankRow = (r: string): boolean => r === '' || r === MARK;
+
+// Escribe las líneas (un sistema, o una expresión normal si solo queda una) con el cursor donde está MARK
+function setRows(rows: string[]) {
+  if (rows.length === 1 && rows[0] === MARK) { mf.value = ''; return; }
+  const latex = rows.length === 1 ? rows[0] : `\\begin{cases}${rows.join('\\\\')}\\end{cases}`;
+  const upToMark = latex.slice(0, latex.indexOf(MARK) + MARK.length);
+  mf.value = latex;
+  mf.executeCommand('moveToMathfieldStart');
+  for (let n = upToMark.split(MARK).length - 1; n > 0; n--) mf.executeCommand('moveToNextPlaceholder');
+  // el marcador se quita, salvo que la línea esté vacía (entonces es su hueco)
+  if (!rows.some(r => r === MARK)) mf.executeCommand('deleteBackward');
+}
+
+// ⌫ al principio de una línea de un sistema: la une con la anterior, como en un editor de texto.
+// Si queda una sola línea, el sistema se deshace y vuelve a ser una expresión normal.
+function backspace() {
+  const before = mf.getValue('latex-unstyled');
+  const pos = mf.position;
+  mf.executeCommand('deleteBackward');
+  if (mf.getValue('latex-unstyled') !== before) return;
+  const rows = systemRows(before);
+  if (!rows) return;
+  if (rows.length === 1) return setRows([blankRow(rows[0]) ? MARK : MARK + rows[0]]);
+  // la línea del cursor es la que desaparece al quitar la fila actual
+  mf.executeCommand('removeRow');
+  const left = systemRows(mf.getValue('latex-unstyled'));
+  const restore = () => { mf.value = before; mf.position = pos; };
+  if (!left || left.length !== rows.length - 1) return restore();
+  let i = 0;
+  while (i < left.length && left[i] === rows[i]) i++;
+  const next = rows.filter((_, k) => k !== i);
+  if (i > 0) {
+    const prev = rows[i - 1], cur = rows[i];
+    next[i - 1] = (blankRow(prev) ? '' : prev) + MARK + (blankRow(cur) ? '' : cur);
+  } else if (blankRow(rows[0])) {
+    next[0] = MARK + (blankRow(next[0]) ? '' : next[0]);
+  } else if (next.every(blankRow)) {
+    next.splice(0, next.length, MARK + rows[0]);
+  } else {
+    return restore(); // al principio de la primera línea no hay nada con qué unirla
+  }
+  setRows(next);
 }
 
 // Fila de herramientas
@@ -532,16 +611,37 @@ tap('mode-notation', () => applySettings({ notation: NOTATIONS[(NOTATIONS.indexO
 // --- Ajustes ---
 const dialog = $<HTMLDialogElement>('settings');
 const form = dialog.querySelector('form')!;
-tap('btn-settings', () => {
+const OCR_FIELDS = new Set(['ocrProvider', 'geminiKey', 'claudeKey']);
+function showOcrFields() {
+  const provider = (form.elements.namedItem('ocrProvider') as HTMLSelectElement).value;
+  form.querySelectorAll<HTMLElement>('[data-ocr]').forEach(el => { el.hidden = el.dataset.ocr !== provider; });
+}
+function openSettings(focus?: string) {
   for (const [k, v] of Object.entries(settings)) {
     const el = form.elements.namedItem(k) as HTMLInputElement | HTMLSelectElement | null;
     if (!el) continue;
     if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = v as boolean;
     else el.value = String(v);
   }
+  const ocr = loadOcr();
+  (form.elements.namedItem('ocrProvider') as HTMLSelectElement).value = ocr.provider;
+  (form.elements.namedItem('geminiKey') as HTMLInputElement).value = ocr.geminiKey;
+  (form.elements.namedItem('claudeKey') as HTMLInputElement).value = ocr.claudeKey;
+  showOcrFields();
   dialog.showModal();
+  if (focus) (form.elements.namedItem(focus) as HTMLElement | null)?.focus();
+}
+tap('btn-settings', () => openSettings());
+// la clave se guarda al escribirla (aunque se cierre el diálogo sin tocar nada más)
+form.addEventListener('input', ev => {
+  const name = (ev.target as HTMLInputElement).name;
+  if (!OCR_FIELDS.has(name)) return;
+  const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement).value;
+  saveOcr({ provider: val('ocrProvider') as OcrConfig['provider'], geminiKey: val('geminiKey').trim(), claudeKey: val('claudeKey').trim() });
+  showOcrFields();
 });
-form.addEventListener('change', () => {
+form.addEventListener('change', ev => {
+  if (OCR_FIELDS.has((ev.target as HTMLInputElement).name)) return;
   const num = (name: string, min: number, max: number, def: number) => {
     const n = Math.round(Number((form.elements.namedItem(name) as HTMLInputElement).value));
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
@@ -647,5 +747,138 @@ tap('sheet-close', () => closeSheet());
 sheet.addEventListener('click', ev => { if (ev.target === sheet) closeSheet(); });
 window.addEventListener('popstate', () => closeSheet(true));
 
+// --- Pegar, soltar y compartir: texto o imágenes con fórmulas ---
+let reading = false;
+
+// Texto pegado: LaTeX si lo parece; si no, MathLive lo interpreta (3x^2+2=5, sqrt(2)…)
+function insertText(text: string) {
+  const t = text.trim();
+  if (!t) return;
+  mf.focus();
+  mf.insert(t, { format: /\\[a-zA-Z]/.test(t) ? 'latex' : 'auto', focus: true, scrollIntoView: true });
+  update();
+}
+
+async function readImage(blob: Blob) {
+  if (reading) return;
+  reading = true;
+  answerEl.replaceChildren(message('Leyendo la fórmula de la imagen…', 'muted reading'));
+  answerEl.classList.remove('has-result');
+  solBtn.hidden = true;
+  altRow.replaceChildren();
+  try {
+    const latex = await recognize(blob);
+    saveHistoryNow();
+    mf.value = latex;
+    entryOpen = false;
+    mf.focus();
+    mf.executeCommand('moveToMathfieldEnd');
+    update();
+    toast('Fórmula leída: revísala por si acaso');
+  } catch (e) {
+    update();
+    if (e instanceof OcrError) {
+      toast(e.message);
+      if (e.needsKey) openSettings(loadOcr().provider === 'claude' ? 'claudeKey' : 'geminiKey');
+    } else {
+      toast('No se pudo leer la imagen');
+      console.error(e);
+    }
+  } finally {
+    reading = false;
+  }
+}
+
+async function pasteFromClipboard() {
+  try {
+    if (navigator.clipboard?.read) {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const img = item.types.find(t => t.startsWith('image/'));
+        if (img) return readImage(await item.getType(img));
+      }
+      for (const item of items) {
+        if (item.types.includes('text/plain')) return insertText(await (await item.getType('text/plain')).text());
+      }
+      return toast('El portapapeles está vacío');
+    }
+    insertText(await navigator.clipboard.readText());
+  } catch (e) {
+    const name = (e as DOMException)?.name;
+    toast(name === 'NotAllowedError' ? 'Permite a la app leer el portapapeles para poder pegar' : 'No se pudo leer el portapapeles');
+  }
+}
+
+// Ctrl+V con teclado físico: las imágenes las leemos nosotros; el texto lo pega MathLive
+mf.addEventListener('paste', ev => {
+  const file = [...(ev.clipboardData?.files ?? [])].find(f => f.type.startsWith('image/'));
+  if (!file) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  void readImage(file);
+}, { capture: true });
+
+// Arrastrar y soltar (p. ej. desde la selección con IA de Samsung o desde otra ventana)
+const dropZone = $('drop-zone');
+let dragDepth = 0;
+const draggable = (ev: DragEvent) => {
+  const types = [...(ev.dataTransfer?.types ?? [])];
+  return types.includes('Files') || types.includes('text/plain') || types.includes('text/uri-list');
+};
+document.addEventListener('dragenter', ev => {
+  if (!draggable(ev)) return;
+  ev.preventDefault();
+  dragDepth++;
+  dropZone.hidden = false;
+});
+document.addEventListener('dragover', ev => {
+  if (!draggable(ev)) return;
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+});
+document.addEventListener('dragleave', () => {
+  if (--dragDepth <= 0) { dragDepth = 0; dropZone.hidden = true; }
+});
+document.addEventListener('drop', ev => {
+  dragDepth = 0;
+  dropZone.hidden = true;
+  const dt = ev.dataTransfer;
+  if (!dt) return;
+  ev.preventDefault();
+  const file = [...dt.files].find(f => f.type.startsWith('image/'));
+  if (file) return void readImage(file);
+  const text = dt.getData('text/plain');
+  if (text) return insertText(text);
+  const url = dt.getData('text/uri-list').split('\n').find(u => /^https?:/.test(u));
+  if (url) {
+    // imagen arrastrada desde una web: se descarga si el sitio lo permite
+    fetch(url).then(r => r.blob()).then(b => (b.type.startsWith('image/') ? readImage(b) : toast('Eso no es una imagen')))
+      .catch(() => toast('No se pudo descargar la imagen; prueba a copiarla y pegarla'));
+  }
+});
+
+// Lo compartido desde otra app (menú «Compartir» de Android) lo deja el service worker en una caché
+async function receiveShared() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('compartido')) return;
+  history_.replaceState(null, '', location.pathname);
+  try {
+    const cache = await caches.open('compartido');
+    const img = await cache.match('imagen');
+    const txt = await cache.match('texto');
+    await Promise.all([cache.delete('imagen'), cache.delete('texto')]);
+    if (img) await readImage(await img.blob());
+    else if (txt) insertText(await txt.text());
+  } catch {
+    toast('No se pudo recibir lo compartido');
+  }
+}
+
+// Al minimizar o pasar a otra ventana se quita el foco del editor: si no, Android vuelve a sacar su teclado
+// al volver (y lo mismo si se enfoca al arrancar). El foco regresa en cuanto se pulsa una tecla.
+document.addEventListener('visibilitychange', () => { if (document.hidden) mf.blur(); });
+window.addEventListener('blur', () => mf.blur());
+
 applySettings({});
-requestAnimationFrame(() => mf.focus());
+mf.executeCommand('moveToMathfieldEnd');
+void receiveShared();

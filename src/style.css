@@ -272,7 +272,7 @@ math-field::part(placeholder) { font-size: 0.6em; opacity: 0.7; }
 .tools {
   grid-area: tools;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   padding: 2px 4px;
 }
 .tabs {
@@ -650,3 +650,45 @@ dialog input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--a
   text-overflow: ellipsis;
 }
 .toast[hidden] { display: none; }
+
+/* ---------- Pegar / soltar imágenes ---------- */
+.drop-zone {
+  position: fixed;
+  inset: 12px;
+  z-index: 50;
+  border: 3px dashed var(--accent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent-soft) 85%, transparent);
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.drop-zone[hidden] { display: none; }
+.answer-msg.reading::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+dialog label[hidden] { display: none; }
+dialog input[type='password'] {
+  font: inherit;
+  color: var(--text);
+  background: var(--key-fn);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+  width: 190px;
+  min-width: 0;
+}
+dialog .hint { margin: 0; font-size: 12px; color: var(--muted); }

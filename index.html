@@ -110,10 +110,25 @@
             <option value="i">i (matemáticas)</option>
           </select>
         </label>
+        <h2>Leer fórmulas de imágenes</h2>
+        <label>Servicio
+          <select name="ocrProvider">
+            <option value="gemini">Gemini (gratis con límite)</option>
+            <option value="claude">Claude (de pago por uso)</option>
+          </select>
+        </label>
+        <label data-ocr="gemini">Clave de Gemini
+          <input type="password" name="geminiKey" autocomplete="off" spellcheck="false" placeholder="AIza…" />
+        </label>
+        <label data-ocr="claude">Clave de Claude
+          <input type="password" name="claudeKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+        </label>
+        <p class="hint">La clave se guarda solo en este dispositivo y solo se envía a Google o a Anthropic al leer una imagen.</p>
         <div class="dialog-actions"><button class="primary" value="close">Listo</button></div>
       </form>
     </dialog>
 
+    <div class="drop-zone" id="drop-zone" hidden>Suelta aquí la imagen o el texto</div>
     <div class="toast" id="toast" role="status" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

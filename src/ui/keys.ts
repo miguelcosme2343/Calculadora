@@ -5,7 +5,7 @@ interface Base { label: string; cls?: string; title?: string; alts?: Key[] }
 export type Key =
   | (Base & { insert: string })
   | (Base & { typed: string })
-  | (Base & { cmd: 'back' | 'left' | 'right' | 'newline' | 'history' | 'abc' })
+  | (Base & { cmd: 'back' | 'left' | 'right' | 'newline' | 'history' | 'abc' | 'paste' })
   | (Base & { imag: true })
   | (Base & { decimal: true })
   | (Base & { blank: true })
@@ -25,6 +25,7 @@ const mx = (r: number, c: number, name = 'pmatrix') =>
 export const TOOLS: Key[] = [
   { label: 'abc', cmd: 'abc', cls: 'tool', title: 'Letras' },
   { label: '<svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4"/></svg>', cmd: 'history', cls: 'tool icon', title: 'Historial' },
+  { label: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg>', cmd: 'paste', cls: 'tool icon', title: 'Pegar (texto o imagen con una fórmula)' },
   { label: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>', cmd: 'left', cls: 'tool icon', title: 'Mover a la izquierda' },
   { label: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>', cmd: 'right', cls: 'tool icon', title: 'Mover a la derecha' },
   { label: '<svg viewBox="0 0 24 24"><path d="M20 5v6a3 3 0 0 1-3 3H5M9 10l-4 4 4 4"/></svg>', cmd: 'newline', cls: 'tool icon', title: 'Nueva línea (sistema de ecuaciones)' },

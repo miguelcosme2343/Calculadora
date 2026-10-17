@@ -6,8 +6,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      // service worker propio (src/sw.ts) para recibir imágenes compartidas desde otras apps
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['icon.svg'],
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
@@ -27,6 +31,17 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // Aparece en el menú «Compartir» de Android; lo recibe src/sw.ts
+        share_target: {
+          action: 'compartir',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            files: [{ name: 'image', accept: ['image/*'] }],
+          },
+        },
       },
     }),
   ],
